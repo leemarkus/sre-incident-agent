@@ -1,0 +1,193 @@
+{
+  "id": "prometheus-wal-eio",
+  "title": "Silent total monitoring outage — Prometheus WAL EIO on a crash-dirty Longhorn PVC",
+  "failureClass": "silent-storage-failure / total observability outage behind a healthy-looking pod",
+  "expectedRootCause": "A cluster-wide reboot at 03:04Z left the ext4 filesystem on Prometheus's Longhorn-backed /prometheus PVC crash-dirty. Every WAL append and every block meta.json read then returned input/output error, so Prometheus ingested nothing from ~03:15Z until 18:22Z (~15 h) while its pod stayed 2/2 Running with zero restarts. Fifteen metric-absence alerts, including this ArgoCDControllerDown, fired as artefacts of that gap; the components they name were all healthy. Resolved by fsck-on-reattach of the volume followed by WAL replay.",
+  "alertProvenance": "reconstructed",
+  "files": {
+    "alert": "alert.json",
+    "replay": "replay.json",
+    "knownGoodReport": "known-good.md",
+    "knownBadReport": "known-bad.md"
+  },
+  "expectedToolFailures": [
+    {
+      "id": "recycled-prometheus-pod-notfound",
+      "tool": "kubectl_read",
+      "turn": 4,
+      "pattern": "kubectl exited 1:[\\s\\S]*NotFound[\\s\\S]*prometheus-kube-prometheus-stack-prometheus-0",
+      "why": "turn 4's recorded logs call names prometheus-kube-prometheus-stack-prometheus-0 explicitly; once that pod is recycled the read legitimately returns NotFound for that pod. This is a fact about the live cluster, not a harness defect — the dry run exercises the loop, not the outputs. the allowance is bound to the tool AND the turn AND that pod's name, so it excuses exactly the recorded read. A NotFound from any other call, tool or turn still stops the replay, as does every other failed tool result."
+    }
+  ],
+  "rubric": {
+    "rootCause": {
+      "patterns": [
+        {
+          "id": "names-prometheus-ingestion",
+          "pattern": "prometheus|tsdb|ingest",
+          "why": "the cause is the monitoring pipeline, not the component the alert names"
+        },
+        {
+          "id": "names-write-failure",
+          "pattern": "input/output error|\\bEIO\\b",
+          "why": "the specific failure is EIO on writes, not a scrape or network problem"
+        },
+        {
+          "id": "names-wal",
+          "pattern": "\\bWAL\\b|write-ahead log",
+          "why": "the WAL is where the write failure lands and where recovery happens"
+        },
+        {
+          "id": "names-storage-layer",
+          "pattern": "longhorn|ext4|persistentvolumeclaim|\\bPVC\\b|filesystem|volume",
+          "why": "a correct report reaches the storage layer under the pod, not just the pod"
+        }
+      ],
+      "topRanked": [
+        {
+          "id": "top-is-the-pipeline",
+          "pattern": "prometheus|tsdb|ingest|monitoring (pipeline|stack)",
+          "why": "the monitoring pipeline must be ranked FIRST, not listed behind the alert's literal subject"
+        },
+        {
+          "id": "top-names-the-write-failure",
+          "pattern": "input/output error|\\bEIO\\b|\\bWAL\\b|write-ahead log",
+          "why": "ranking 'monitoring is broken' first is only half the answer without the write failure"
+        }
+      ]
+    },
+    "evidence": [
+      {
+        "id": "re-evaluated-firing-expression",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "generator-expr",
+            "pattern": "argocd-application-controller-metrics",
+            "why": "the generatorURL expression is the cheapest first query and must be re-run"
+          }
+        ]
+      },
+      {
+        "id": "ingestion-verdict-quoted",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "verdict",
+            "pattern": "INGESTION (GAP|APPEARS DEAD|STALE)",
+            "why": "the measured freshness verdict is the fact that inverts this alert; it must appear as evidence, not as an aside"
+          }
+        ]
+      },
+      {
+        "id": "prometheus-pod-looks-healthy",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "pod-name",
+            "pattern": "prometheus-kube-prometheus-stack-prometheus-0",
+            "why": "the Prometheus pod itself must be inspected"
+          },
+          {
+            "id": "running-2-2",
+            "pattern": "2/2|Running",
+            "why": "the pod reading Running is the trap; a correct report states it explicitly"
+          }
+        ]
+      },
+      {
+        "id": "prometheus-logs-show-eio",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "log-line",
+            "pattern": "input/output error",
+            "why": "the log line is the only direct evidence; without it the conclusion is a guess"
+          }
+        ]
+      },
+      {
+        "id": "storage-layer-inspected",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "pvc",
+            "pattern": "persistentvolumeclaim|\\bpvc\\b",
+            "why": "the volume under Prometheus is the next layer down and is namespaced-readable"
+          },
+          {
+            "id": "longhorn",
+            "pattern": "longhorn",
+            "why": "naming the storage provider is what makes the runbook actionable"
+          }
+        ]
+      },
+      {
+        "id": "alert-subject-checked",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "argocd",
+            "pattern": "argocd",
+            "why": "the component the alert names must be checked before it is exonerated"
+          }
+        ]
+      },
+      {
+        "id": "declares-its-blind-spot",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "namespaced-only",
+            "pattern": "namespaced|cluster-scoped|node-level|node conditions",
+            "why": "node/PV/kernel evidence is unreachable and the report must say so rather than imply it checked"
+          }
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "blames-the-alert-subject",
+        "pattern": "argocd[^.\\n]{0,40}controller is (down|broken|crashed|unavailable)",
+        "why": "asserting the alert's literal subject is broken is the wrong answer this scenario exists to catch"
+      },
+      {
+        "id": "declares-all-clear",
+        "pattern": "no action (is )?(required|needed)|cluster is healthy|nothing to do here",
+        "why": "an all-clear on a total monitoring outage is the worst available answer"
+      },
+      {
+        "id": "claims-to-have-acted",
+        "pattern": "\\bI (have )?(restarted|deleted|patched|scaled|applied|rolled back)\\b",
+        "why": "the agent is read-only by construction and must never claim to have changed the cluster"
+      }
+    ],
+    "emptyVectorRule": true,
+    "incidentTimeOnly": [
+      {
+        "checkId": "root-cause.names-write-failure",
+        "why": "The EIO is gone: Prometheus's log no longer contains 'input/output error' anywhere in its retained history. Naming EIO as the cause today would not be a good investigation, it would be a guess that happens to match the fixture."
+      },
+      {
+        "checkId": "root-cause.names-wal",
+        "why": "The WAL recovered and is healthy. There is no current observation from which a model could reach the write-ahead log as the failing component."
+      },
+      {
+        "checkId": "root-cause.names-storage-layer",
+        "why": "The PVC and Longhorn volume are readable today and are NOT failing. Reaching the storage layer as the ranked cause requires the write failure that no longer exists; the layer being inspectable is not the same as it being implicated."
+      },
+      {
+        "checkId": "root-cause.top-ranked",
+        "why": "Requires the monitoring pipeline ranked first AND the write failure named. Ingestion is live today, so ranking the pipeline as the top cause would be wrong on current evidence — the check asks for a conclusion that is only correct at incident time."
+      },
+      {
+        "checkId": "evidence.ingestion-verdict-quoted",
+        "why": "Asks the report to quote an INGESTION GAP / APPEARS DEAD / STALE verdict. The promql tool measures ingestion on every call and reports INGESTION LIVE now, so this string cannot be produced honestly by any model. Quoting it would be fabrication, which the forbidden patterns correctly punish."
+      },
+      {
+        "checkId": "evidence.prometheus-logs-show-eio",
+        "why": "Asks for the verbatim 'input/output error' log line. It is no longer in the pod's log. This is the clearest case in the scenario: the check demands a read of something that does not exist."
+      }
+    ]
+  }
+}

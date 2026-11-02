@@ -1,0 +1,7 @@
+#!/bin/bash
+# Read-only identity and authorization audit of the agent's service account.
+# Intentionally loads no environment file.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+exec node --import tsx "$ROOT/scripts/kube-identity-audit.ts" "$@"

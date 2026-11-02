@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# secrets: never commit real values; see .env.example
+.env
+.env.*
+!.env.example
+*.kubeconfig
+
+# fetched documentation corpus (regenerable)
+.cache/
+
+# run output: reports, transcripts and tool logs never enter git
+triage-*.md
+reports/
+
+.DS_Store

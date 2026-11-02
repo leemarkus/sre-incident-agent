@@ -1,0 +1,38 @@
+{
+  "version": "4",
+  "groupKey": "{}:{alertname=\"ArgoCDControllerDown\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "notify",
+  "groupLabels": {
+    "alertname": "ArgoCDControllerDown"
+  },
+  "commonLabels": {
+    "alertname": "ArgoCDControllerDown",
+    "prometheus": "monitoring/kube-prometheus-stack-prometheus",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "description": "Nothing is reconciling desired state, or the metrics endpoint is gone. Distinguishes \"CD is broken\" from \"an app is broken\".",
+    "summary": "ArgoCD application-controller is not being scraped — CD state is unknown"
+  },
+  "externalURL": "http://kube-prometheus-stack-alertmanager.monitoring:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "ArgoCDControllerDown",
+        "prometheus": "monitoring/kube-prometheus-stack-prometheus",
+        "severity": "critical"
+      },
+      "annotations": {
+        "description": "Nothing is reconciling desired state, or the metrics endpoint is gone. Distinguishes \"CD is broken\" from \"an app is broken\".",
+        "summary": "ArgoCD application-controller is not being scraped — CD state is unknown"
+      },
+      "startsAt": "2026-07-30T03:26:43.390Z",
+      "endsAt": "2026-07-30T18:15:43.390Z",
+      "generatorURL": "http://kube-prometheus-stack-prometheus.monitoring:9090/graph?g0.expr=up%7Bjob%3D%22argocd-application-controller-metrics%22%7D+%3D%3D+0+or+absent%28up%7Bjob%3D%22argocd-application-controller-metrics%22%7D+%3D%3D+1%29&g0.tab=1",
+      "fingerprint": "11076b67ce34f525"
+    }
+  ]
+}

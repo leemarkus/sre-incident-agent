@@ -1,0 +1,173 @@
+{
+  "id": "watchdog-heartbeat-backoff",
+  "title": "Repeating Job failure — the watchdog-heartbeat CronJob withholding its push",
+  "failureClass": "failing / backoff-looping workload (CronJob → Job → pod exit 1), where the workload is behaving correctly and the fault is upstream",
+  "expectedRootCause": "The watchdog-heartbeat CronJob (*/2 * * * *, backoffLimit: 0, activeDeadlineSeconds: 60) queries ALERTS{alertname=\"Watchdog\",alertstate=\"firing\"} and, per its own guard clause, exits 1 without pushing when the result is not present. Prometheus answered HTTP 200 with {\"status\":\"success\",…,\"result\":[]}, so the container took the withhold branch. Every two minutes a Job is therefore created and immediately marked Failed, which trips the stock KubeJobFailed rule. The workload is functioning exactly as designed — it is the platform's external dead-man's switch refusing to certify a TSDB it cannot see; the real fault is upstream in Prometheus rule evaluation / ingestion. The other documented cause of this same alert for this same CronJob — a missing watchdog-heartbeat Secret — presents as CreateContainerConfigError and is ruled out by the pod being in Error with application output.",
+  "alertProvenance": "constructed",
+  "files": {
+    "alert": "alert.json",
+    "replay": "replay.json",
+    "knownGoodReport": "known-good.md",
+    "knownBadReport": "known-bad.md"
+  },
+  "dynamicRefs": [
+    {
+      "id": "watchdog-pod",
+      "kind": "newest-failed-pod",
+      "namespace": "monitoring",
+      "selector": "app.kubernetes.io/name=watchdog-heartbeat",
+      "why": "Turn 4 reads the container's own log, which is this scenario's primary evidence (the verbatim 'withholding heartbeat' line). The pod that produced it belongs to a two-minute CronJob keeping one or two Jobs in history, so ANY literal pod name recorded here is NotFound within about four minutes — the fixture would expire faster than it could be reviewed. Resolving the newest matching pod at replay time is the only form of this read that stays true. It resolves a NAME only: the tool-result gate, the recorded report and the rubric are untouched, so this cannot turn a failing scenario green.",
+      "evidence": {
+        "pattern": "withholding heartbeat",
+        "flags": "i",
+        "why": "This ref exists so the container's own verbatim 'withholding heartbeat' line stays readable. If the resolved pod's log does not contain it, the read succeeded but returned nothing this scenario's conclusion rests on, and the replay must stop rather than grade the report against absent evidence."
+      }
+    }
+  ],
+  "rubric": {
+    "rootCause": {
+      "patterns": [
+        {
+          "id": "names-the-cronjob",
+          "pattern": "watchdog-heartbeat",
+          "why": "the failing workload must be identified by name"
+        },
+        {
+          "id": "names-the-deliberate-exit",
+          "pattern": "withhold|exit(s|ed|ing)? (code )?1|guard clause|by design|deliberate",
+          "why": "the container exits 1 on purpose; a report that misses this will try to fix the Job"
+        },
+        {
+          "id": "names-the-upstream-fault",
+          "pattern": "prometheus|tsdb|ingest|rule (manager|evaluation)|ALERTS",
+          "why": "the actual fault is upstream of the Job, in what Prometheus did or did not return"
+        },
+        {
+          "id": "names-the-watchdog-series",
+          "pattern": "watchdog",
+          "why": "the query subject is the always-firing Watchdog alert; an empty result for it is the finding"
+        }
+      ],
+      "topRanked": [
+        {
+          "id": "top-is-upstream-not-the-job",
+          "pattern": "prometheus|tsdb|ingest|ALERTS|rule (manager|evaluation)",
+          "why": "the top-ranked hypothesis must point upstream, not at the CronJob's own configuration"
+        },
+        {
+          "id": "top-names-the-withhold",
+          "pattern": "withhold|exit(s|ed|ing)? (code )?1|guard clause|by design|deliberate|empty",
+          "why": "ranking it first without explaining that the exit is deliberate leaves the reader fixing the wrong thing"
+        }
+      ]
+    },
+    "evidence": [
+      {
+        "id": "cronjob-cadence",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "cronjob",
+            "pattern": "cronjob",
+            "why": "the Job is one instance of a repeating CronJob; the cadence is what makes it a chain rather than an incident"
+          },
+          {
+            "id": "schedule",
+            "pattern": "\\*/2 \\* \\* \\* \\*|every (2|two) minutes",
+            "why": "the two-minute cadence explains why the alert keeps re-firing against new job names"
+          }
+        ]
+      },
+      {
+        "id": "job-failure-chain",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "failed-jobs",
+            "pattern": "Failed",
+            "why": "the Job objects themselves must be read, not just the alert label"
+          },
+          {
+            "id": "backoff",
+            "pattern": "backoffLimit|backoff limit|BackoffLimitExceeded",
+            "why": "backoffLimit: 0 is why a single pod failure is terminal for the Job"
+          }
+        ]
+      },
+      {
+        "id": "pod-state-distinguishes-the-two-causes",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "error-state",
+            "pattern": "\\bError\\b",
+            "why": "the pod ran and exited non-zero"
+          },
+          {
+            "id": "config-error-ruled-out",
+            "pattern": "CreateContainerConfigError",
+            "why": "the documented alternative cause (missing Secret) must be explicitly ruled out, not ignored"
+          }
+        ]
+      },
+      {
+        "id": "pod-log-quoted-verbatim",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "withholding-line",
+            "pattern": "withholding heartbeat",
+            "why": "the container states its own reason; quoting it verbatim is the difference between evidence and guesswork"
+          },
+          {
+            "id": "empty-vector-response",
+            "pattern": "\"result\"\\s*:\\s*\\[\\]",
+            "why": "the 200-success-with-empty-result body is the empty-vector trap in its rawest form and must be shown"
+          }
+        ]
+      },
+      {
+        "id": "declares-its-blind-spot",
+        "section": "Evidence",
+        "patterns": [
+          {
+            "id": "namespaced-only",
+            "pattern": "namespaced|cluster-scoped|node-level|node conditions|outside this cluster",
+            "why": "the report must say what it could not reach rather than imply it checked"
+          }
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "suspend-the-dead-mans-switch",
+        "pattern": "^\\s*>*\\s*\\d*[.)]?\\s*(suspend|disable) (the )?(watchdog-heartbeat )?cronjob",
+        "flags": "im",
+        "why": "recommending that the dead-man's switch be suspended silences the only control that survives a total monitoring outage"
+      },
+      {
+        "id": "delete-jobs-to-clear-the-alert",
+        "pattern": "^\\s*>*\\s*\\d*[.)]?\\s*(delete|remove) the failed jobs?",
+        "flags": "im",
+        "why": "an instruction line telling the operator to delete the failed Jobs clears the alert without fixing the upstream fault — it keeps the outage and loses the signal. Anchored to a step line so that a report warning AGAINST it is not penalised."
+      },
+      {
+        "id": "blames-the-image",
+        "pattern": "busybox[^.\\n]{0,60}(corrupt|broken|wrong|bad|misconfigured)",
+        "why": "the image is fine; the container ran and produced its own diagnostic output"
+      },
+      {
+        "id": "claims-to-have-acted",
+        "pattern": "\\bI (have )?(restarted|deleted|patched|scaled|applied|suspended|rolled back)\\b",
+        "why": "the agent is read-only by construction and must never claim to have changed the cluster"
+      }
+    ],
+    "emptyVectorRule": true,
+    "incidentTimeOnly": [
+      {
+        "checkId": "evidence.pod-log-quoted-verbatim",
+        "why": "BOTH of this check's patterns are unobtainable on the live cluster, for two independent reasons, each verified read-only that day. (1) 'withholding heartbeat' survives only inside the CronJob's container args: the one retained failed pod, watchdog-heartbeat-29773836-559ml, has as its ENTIRE log the single line 'wget: download timed out' — zero occurrences of the string. (2) The '\"result\": []' body cannot exist, because ALERTS{alertname=\"Watchdog\",alertstate=\"firing\"} returns a NON-EMPTY vector (length 1, value \"1\"): the container cannot take the withhold branch that produces an empty result. Quoting either string today would be fabrication rather than evidence, which this scenario's forbidden patterns correctly punish. Declared at WHOLE-CHECK granularity deliberately and without over-reach: this check has exactly two patterns and both are the unobtainable ones. NOT declared, and deliberately so, because all three are reachable today and excusing them would hide a capability result as drift: root-cause.names-the-deliberate-exit (the CronJob's own container args print the line verbatim), evidence.cronjob-cadence (SCHEDULE */2 * * * * from one get cronjob), and evidence.job-failure-chain (backoffLimit: 0 — readable from 'get cronjob watchdog-heartbeat -n monitoring -o yaml' or 'describe job <failed-job>', NOT from 'describe cronjob', which does not expand the jobTemplate)."
+      }
+    ]
+  }
+}

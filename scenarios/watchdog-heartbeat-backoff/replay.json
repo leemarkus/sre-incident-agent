@@ -1,0 +1,104 @@
+{
+  "_comment": [
+    "Recorded assistant turns for the dry-run transport. FIXTURES, not",
+    "model output — see scenarios/prometheus-wal-eio/replay.json for the full",
+    "note. Every tool_use below really executes against the live cluster.",
+    "The pod name in turn 4 is a real pod from the 2026-07-30 incident window;",
+    "CronJob pods rotate, so a NotFound there in a later dry run is EXPECTED and",
+    "still exercises the loop — the tool result is fed back as a tool_result and",
+    "the loop continues, which is the behaviour under test."
+  ],
+  "turns": [
+    {
+      "text": "One failed Job is rarely the story when the owner is a CronJob. Start with the owner and its cadence.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "monitoring",
+            "resource": "cronjobs"
+          }
+        }
+      ]
+    },
+    {
+      "text": "Now the Job objects, to see whether this is one failure or a chain.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "monitoring",
+            "resource": "jobs"
+          }
+        },
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "describe",
+            "namespace": "monitoring",
+            "resource": "cronjobs",
+            "name": "watchdog-heartbeat"
+          }
+        }
+      ]
+    },
+    {
+      "text": "Pod state next. Error and CreateContainerConfigError are the two documented outcomes for this CronJob and they have completely different causes.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "monitoring",
+            "resource": "pods",
+            "selector": "app.kubernetes.io/name=watchdog-heartbeat",
+            "output": "wide"
+          }
+        }
+      ]
+    },
+    {
+      "text": "The container ran, so its own output is the primary evidence.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "logs",
+            "namespace": "monitoring",
+            "name": "{{ref:watchdog-pod}}",
+            "tailLines": 20
+          }
+        }
+      ]
+    },
+    {
+      "text": "Corroborate the container's reading of Prometheus from a second angle, through the tool that measures ingestion freshness.",
+      "tool_uses": [
+        {
+          "name": "promql_query",
+          "input": {
+            "query": "ALERTS{alertname=\"Watchdog\",alertstate=\"firing\"}"
+          }
+        }
+      ]
+    },
+    {
+      "text": "Before naming the runbook, read what the platform actually wrote down about this CronJob — an uncited claim about the design intent of a dead-man's switch is a guess.",
+      "tool_uses": [
+        {
+          "name": "docs_search",
+          "input": {
+            "query": "watchdog heartbeat dead man's switch external monitoring Prometheus not ingesting",
+            "max_results": 3
+          }
+        }
+      ]
+    },
+    {
+      "text": "> **DRY RUN — the body below is a recorded fixture, not model output.** It was replayed through the real tool loop against the real cluster; only the assistant's turns were scripted. It is evidence that the harness works, and it is not evidence that the model would write this.\n\n",
+      "text_file": "known-good.md"
+    }
+  ]
+}

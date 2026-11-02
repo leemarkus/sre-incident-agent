@@ -1,0 +1,13 @@
+#!/bin/bash
+# sub-file-issue: file ONE published subscription-mode report as an issue, by
+# hand (an acceptance run, or a re-file after the poller's exit 8). Dry by
+# default; --live posts to SRE_SUB_ISSUE_REPO on SRE_SUB_ISSUE_URL (src/sub/issues.ts).
+#
+#   tools/sub-file-issue <report.md> [--key 'alertname|namespace|subject'] [--live]
+#
+# The token is read from the secret manager at filing time (src/sub/issues.ts);
+# never pass it in, and never put it in .env.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 2
+exec node --env-file-if-exists="$ROOT/.env" --import tsx "$ROOT/src/sub/file-issue.ts" "$@"

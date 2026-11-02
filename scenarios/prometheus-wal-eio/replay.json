@@ -1,0 +1,97 @@
+{
+  "_comment": [
+    "Recorded assistant turns for the dry-run transport.",
+    "These are FIXTURES, not model output. They were written by hand to trace",
+    "the evidence chain a correct triage should follow for this scenario, and",
+    "they are replayed through the SDK's real toolRunner loop: every tool_use",
+    "below is dispatched to the real read-only tool and really executes against",
+    "the live cluster. What is faked is exactly one thing — the assistant's",
+    "side of the HTTP conversation. See src/transport.ts.",
+    "Tool results therefore vary run to run (pod names rotate, and a NotFound",
+    "on the logs call is expected once the named pod is recycled). That is",
+    "fine: the dry run exercises the loop, not the outputs. The final report is",
+    "the recorded one either way, which is why its grade proves the harness and",
+    "the grader, never the model."
+  ],
+  "turns": [
+    {
+      "text": "The alert asserts something narrow: no fresh `up == 1` sample for the ArgoCD controller scrape job. Before believing anything about ArgoCD, re-evaluate the expression that fired.",
+      "tool_uses": [
+        {
+          "name": "promql_query",
+          "input": {
+            "query": "up{job=\"argocd-application-controller-metrics\"}"
+          }
+        }
+      ]
+    },
+    {
+      "text": "The freshness verdict changes the meaning of that empty result. Widen out and find when ingestion stopped, across all jobs.",
+      "tool_uses": [
+        {
+          "name": "promql_query",
+          "input": {
+            "query": "count(up)",
+            "range": { "lookback_seconds": 86400, "step_seconds": 300 }
+          }
+        }
+      ]
+    },
+    {
+      "text": "Now look at Prometheus itself.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "monitoring",
+            "resource": "pods",
+            "output": "wide"
+          }
+        }
+      ]
+    },
+    {
+      "text": "The pod reads healthy, which is exactly why the logs matter more than the status here.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "logs",
+            "namespace": "monitoring",
+            "resource": "pods",
+            "name": "prometheus-kube-prometheus-stack-prometheus-0",
+            "container": "prometheus",
+            "tailLines": 200
+          }
+        }
+      ]
+    },
+    {
+      "text": "EIO on the WAL points at the volume. Check the claim underneath it, and confirm the alert's literal subject is actually fine.",
+      "tool_uses": [
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "monitoring",
+            "resource": "pvc"
+          }
+        },
+        {
+          "name": "kubectl_read",
+          "input": {
+            "subcommand": "get",
+            "namespace": "argocd",
+            "resource": "pods",
+            "output": "wide"
+          }
+        }
+      ]
+    },
+    {
+      "text": "> **DRY RUN — the body below is a recorded fixture, not model output.** It was replayed through the real tool loop against the real cluster; only the assistant's turns were scripted. It is evidence that the harness works, and it is not evidence that the model would write this.\n\n",
+      "text_file": "known-good.md"
+    }
+  ]
+}

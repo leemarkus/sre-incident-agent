@@ -1,0 +1,44 @@
+#!/bin/bash
+# sub-poll: scheduler entry point for the subscription-mode poller.
+#
+# Reads firing ALERTS through the Grafana datasource proxy, groups them into
+# incidents, and runs at most SRE_SUB_MAX_RUNS_PER_POLL triages that are out of
+# cooldown. Writes one `== <UTC ISO> sub-poll exit <N>` line per run and always
+# exits 0, so the scheduler never marks the job failed for a condition that needs
+# a person. Set SRE_SUB_NOTIFY to a command to be told about non-zero exits; it
+# is called as: $SRE_SUB_NOTIFY <exit-code> <one-line summary>.
+set -u
+ROOT="${SRE_SUB_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+cd "$ROOT" || { printf '== %s sub-poll exit 1\n' "$(date -u +%FT%TZ)"; exit 0; }
+LOG_DIR="${SRE_SUB_STATE_DIR:-$HOME/.local/state/sre-agent}"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/sub-poll.log"
+
+if [ -f "$ROOT/dist/sub/poll.js" ] && [ -z "${SRE_SUB_FROM_SOURCE:-}" ]; then
+  node --env-file-if-exists="$ROOT/.env" "$ROOT/dist/sub/poll.js" "$@" >>"$LOG" 2>&1
+else
+  node --env-file-if-exists="$ROOT/.env" --import tsx "$ROOT/src/sub/poll.ts" "$@" >>"$LOG" 2>&1
+fi
+rc=$?
+
+case "$rc" in
+  0) summary="ok" ;;
+  2) summary="configuration error; see $LOG" ;;
+  3) summary="monthly budget ceiling reached (SRE_SUB_MONTHLY_BUDGET_USD)" ;;
+  4) summary="claude CLI is not logged in (claude login, or CLAUDE_CODE_OAUTH_TOKEN in the job env)" ;;
+  6) summary="the plan's usage window is exhausted; polling resumes next run" ;;
+  7) summary="publication rejected: a report recommended a forbidden mutation; evidence retained" ;;
+  8) summary="report published but its issue was not filed; re-file with tools/sub-file-issue" ;;
+  *) summary="a triage failed (exit $rc); see $LOG and reports/sub/" ;;
+esac
+if [ "$rc" -ne 0 ] && [ -n "${SRE_SUB_NOTIFY:-}" ]; then
+  "$SRE_SUB_NOTIFY" "$rc" "sre-agent: $summary" >>"$LOG" 2>&1 || true
+fi
+
+status_line="== $(date -u +%FT%TZ) sub-poll exit $rc"
+printf '%s\n' "$status_line" | tee -a "$LOG"
+# keep the log bounded
+if [ "$(wc -l <"$LOG" 2>/dev/null || echo 0)" -gt 4000 ]; then
+  tail -n 2000 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+fi
+exit 0

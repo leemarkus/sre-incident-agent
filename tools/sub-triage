@@ -1,0 +1,18 @@
+#!/bin/bash
+# sub-triage: run ONE subscription-mode triage (Claude via `claude -p`).
+#
+#   tools/sub-triage --alert scenarios/watchdog-heartbeat-backoff/alert.json [--mode postmortem] [--dry-run]
+#   cat payload.json | tools/sub-triage
+#
+# Exit codes (src/sub/run.ts): 0 ok, 2 config, 3 monthly ceiling, 4 not logged in,
+# 5 run failed, 6 the plan's usage window is exhausted, 7 publication rejected
+# (evidence retained beside a same-stem .rejected.json marker).
+# Never carries an API key; refuses to start if one is in the environment.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# A scheduler may start us with cwd=/; `node --import tsx` resolves tsx from cwd.
+cd "$ROOT" || { echo "sub-triage: cannot cd to $ROOT" >&2; exit 2; }
+if [ -f "$ROOT/dist/sub/run.js" ] && [ -z "${SRE_SUB_FROM_SOURCE:-}" ]; then
+  exec node --env-file-if-exists="$ROOT/.env" "$ROOT/dist/sub/run.js" "$@"
+fi
+exec node --env-file-if-exists="$ROOT/.env" --import tsx "$ROOT/src/sub/run.ts" "$@"

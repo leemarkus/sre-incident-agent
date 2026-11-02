@@ -1,0 +1,46 @@
+{
+  "_provenance": "CONSTRUCTED, not captured: written by hand in Alertmanager's documented version 4 shape around the upstream kube-prometheus-stack KubeJobFailed rule. `fingerprint` is deliberately absent rather than invented.",
+  "version": "4",
+  "groupKey": "{}:{alertname=\"KubeJobFailed\",namespace=\"monitoring\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "notify",
+  "groupLabels": {
+    "alertname": "KubeJobFailed",
+    "namespace": "monitoring"
+  },
+  "commonLabels": {
+    "alertname": "KubeJobFailed",
+    "namespace": "monitoring",
+    "job_name": "watchdog-heartbeat-29757262",
+    "severity": "warning",
+    "prometheus": "monitoring/kube-prometheus-stack-prometheus"
+  },
+  "commonAnnotations": {
+    "summary": "Job failed to complete.",
+    "description": "Job monitoring/watchdog-heartbeat-29757262 failed to complete. Removing failed job after investigation should clear this alert.",
+    "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubejobfailed"
+  },
+  "externalURL": "http://kube-prometheus-stack-alertmanager.monitoring:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "KubeJobFailed",
+        "namespace": "monitoring",
+        "job_name": "watchdog-heartbeat-29757262",
+        "condition": "true",
+        "severity": "warning",
+        "prometheus": "monitoring/kube-prometheus-stack-prometheus"
+      },
+      "annotations": {
+        "summary": "Job failed to complete.",
+        "description": "Job monitoring/watchdog-heartbeat-29757262 failed to complete. Removing failed job after investigation should clear this alert.",
+        "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubejobfailed"
+      },
+      "startsAt": "2026-07-30T05:22:41.000Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://kube-prometheus-stack-prometheus.monitoring:9090/graph?g0.expr=kube_job_failed%7Bjob%3D%22kube-state-metrics%22%2Cnamespace%3D~%22.%2A%22%7D+%3E+0&g0.tab=1"
+    }
+  ]
+}
