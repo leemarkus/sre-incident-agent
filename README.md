@@ -163,5 +163,8 @@ as an autonomous investigator and did not pass; it remains as a bench
 Limits worth knowing: it has run on one cluster; only two of its scenarios are
 published; the RBAC audit and the subscription belt are verified offline and by
 audit, not by an adversarial probe of the live CLI; and a passing grade is a
-floor, not proof of a good report. The repository has no license yet, so all
-rights are reserved.
+floor, not proof of a good report.
+
+## License
+
+[MIT](LICENSE)
