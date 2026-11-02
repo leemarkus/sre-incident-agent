@@ -48,9 +48,12 @@ const CHANNEL_SUBRESOURCES = new Set(["exec", "attach", "portforward", "proxy"])
  * against every resource AND subresource, so `get *` includes `get nodes/proxy`.
  */
 function channelResource(resource: string): boolean {
-  if (resource.split(".")[0] === "*") return true;
-  const base = resource.split(".")[0]!; // drop an API group suffix
-  const sub = base.includes("/") ? base.slice(base.indexOf("/") + 1) : "";
+  // Split off the subresource first: the API group sits before the slash
+  // (`deployments.apps/scale`, `widgets.example.com/proxy`).
+  const slash = resource.indexOf("/");
+  const base = slash === -1 ? resource : resource.slice(0, slash);
+  const sub = slash === -1 ? "" : resource.slice(slash + 1);
+  if (base.split(".")[0] === "*") return true;
   return sub === "*" || CHANNEL_SUBRESOURCES.has(sub);
 }
 

@@ -248,11 +248,14 @@ describe("RBAC audit of the agent's service account", async () => {
   const section = (ns: string, ...rows: string[]): string => [`### ${ns}`, header, ...rows].join("\n");
 
   it("proxy, exec, attach and port-forward subresources are violations whatever the verb", () => {
-    for (const resource of ["nodes/proxy", "pods/proxy", "services/proxy", "pods/exec", "pods/attach", "pods/portforward", "pods/*", "*", "*.*", "*.apps"]) {
+    for (const resource of ["nodes/proxy", "pods/proxy", "services/proxy", "pods/exec", "pods/attach", "pods/portforward", "pods/*", "*", "*.*", "*.apps",
+      "widgets.example.com/proxy", "deployments.apps/*", "pods.metrics.k8s.io/exec"]) {
       for (const verb of ["get", "create"]) {
         assert.equal(evaluateKubeIdentity(section("monitoring", row(resource, "", verb))).exitCode, 1, `${verb} ${resource}`);
       }
     }
+    // A grouped resource with a harmless subresource stays a plain read.
+    assert.equal(evaluateKubeIdentity(section("monitoring", row("deployments.apps/scale", "", "get"))).exitCode, 0);
   });
 
   it("the sealed-secrets cert fetch is allowed only as get, by name, in the controller's namespace", () => {
